@@ -1,38 +1,38 @@
-import { Outlet, NavLink, useLocation, Link } from 'react-router-dom'
-import { FaTasks, FaCheckCircle, FaCircle, FaPlus } from 'react-icons/fa'
-import './App.css'
+import { Outlet, NavLink, useLocation, Link } from "react-router-dom";
+import { FaTasks, FaCheckCircle, FaCircle, FaPlus } from "react-icons/fa";
+import "./App.css";
+import { Suspense } from "react";
 
 function App() {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
-  const completeParam = searchParams.get('complete');
-  
+  const completeParam = searchParams.get("complete");
+
   return (
     <div className="app-container">
       <header>
-        <h1><FaTasks /> Task Manager</h1>
+        <h1>
+          <FaTasks /> Task Manager
+        </h1>
         <nav>
           <ul>
             <li>
-              <Link 
-                to="/" 
-                className={completeParam === null ? 'active' : ''}
-              >
+              <Link to="/" className={completeParam === null ? "active" : ""}>
                 <FaTasks /> All Tasks
               </Link>
             </li>
             <li>
-              <Link 
-                to="/?complete=false" 
-                className={completeParam === 'false' ? 'active' : ''}
+              <Link
+                to="/?complete=false"
+                className={completeParam === "false" ? "active" : ""}
               >
                 <FaCircle /> Open Tasks
               </Link>
             </li>
             <li>
-              <Link 
-                to="/?complete=true" 
-                className={completeParam === 'true' ? 'active' : ''}
+              <Link
+                to="/?complete=true"
+                className={completeParam === "true" ? "active" : ""}
               >
                 <FaCheckCircle /> Completed Tasks
               </Link>
@@ -46,13 +46,15 @@ function App() {
         </nav>
       </header>
       <main>
-        <Outlet />
+        <Suspense fallback={<p>Loading route...</p>}>
+          <Outlet />
+        </Suspense>
       </main>
       <footer>
         <p>&copy; {new Date().getFullYear()} Task Manager App</p>
       </footer>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
