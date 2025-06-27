@@ -2,8 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import { createClient } from "@supabase/supabase-js";
-import { json } from "stream/consumers";
+import { MongoClient, ObjectId } from "mongodb";
 
 //Get current file's directory
 const __filename = fileURLToPath(import.meta.url);
@@ -15,90 +14,170 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 //Set up EJS as the view engine
-app.set("view", path.join(__dirname, "view"));
+app.set("views", path.join(__dirname, "views"));
 app.set("view engine", "ejs");
 
 //add middlewave
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "static")));
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const uri = process.env.MONGODB_URI;
+const client = new MongoClient(uri);
+const dbName = "Nodetask";
 
+let db;
+let taskCollection;
+
+//make sure the old and new task have the same id format for client
+function transformTaskDocument(doc) {
+  if (!doc) return null;
+  const task = { ...doc }; ///create a copy of document
+
+  task.id = doc._id.toString(); //Add id field(string) to match MongoDB's _id for client compatibility
+
+  return task;
+}
+
+//Get all tasks
 app.get("/api/tasks", async (req, res) => {
-  const { complete } = req.query;
+  try {
+    const { complete } = req.query;
+    let query = {};
 
-  let query = supabase.from("tasks").select("*");
+    if (complete !== undefined) {
+      const isCompleted = complete === "true";
+      query = { complete: isCompleted };
+    }
+    const tasks = await taskCollection.find(query).toArray();
 
-  if (complete !== undefined) {
-    const isCompleted = complete === "true";
-    query = query.eq("complete", isCompleted);
+    const transformedTasks = tasks.map((task) => transformTaskDocument(task));
+
+    res.json(transformedTasks);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-  const { data, error } = await query;
-
-  if (error) {
-    return res.status(500).json({ error: error.message });
-  }
-  res.json(data);
 });
 
+//get single task
 app.get("/api/tasks/:id", async (req, res) => {
-  const { id } = req.params;
-  const { data, error } = await supabase
-    .from("tasks")
-    .select("*")
-    .eq("id", id)
-    .single();
+  try {
+    const { id } = req.params;
+    const objectId = new ObjectId(id); //convert string ID to MongoDB ObjejctId
 
-  if (error) {
-    return res.status(404).json({ error: `Task with ID ${id} not found` });
+    const task = await taskCollection.findOne({ _id: objectId });
+
+    if (!task) {
+      return res.status(404).json({ error: `Task with ID ${id} not found` });
+    }
+
+    const transformedTask = transformTaskDocument(task);
+
+    res.json(transformedTask);
+  } catch (error) {
+    res.status(500).json({ error: "Invalid ID format" });
   }
-  res.json(data);
 });
 
+//Create task
 app.post("/api/tasks", async (req, res) => {
-  const { title, description, complete } = req.body;
-  if (!title) {
-    return res.status(404).json({ error: `Title is required` });
-  }
-  const { data, error } = await supabase
-    .from("tasks")
-    .insert({ title, description, complete: complete || false })
-    .select();
-
-  if (error) {
+  try {
+    const { title, description, complete } = req.body;
+    if (!title) {
+      return res.status(404).json({ error: `Title is required` });
+    }
+    const task = {
+      title,
+      description: description || "",
+      complete: complete || false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const result = await taskCollection.insertOne(task);
+    const insertedTask = await taskCollection.findOne({
+      _id: result.insertedId,
+    });
+    res.status(201).json(insertedTask);
+  } catch (error) {
     return res.status(404).json({ error: `Task with ID ${id} not found` });
   }
-  res.status(201).json(data[0]); //201: create suceesfully
 });
 
+//Update task
 app.put("/api/tasks/:id", async (req, res) => {
-  const { id } = req.params;
-  const { title, description, complete } = req.body;
+  try {
+    const { id } = req.params;
+    const { title, description, complete } = req.body;
 
-  const { data, error } = await supabase
-    .from("tasks")
-    .update({ title, description, complete })
-    .eq("id", id)
-    .select();
+    const objectId = new ObjectId(id);
+    //update document with current timestamp
+    const updateDoc = {
+      $set: { title, description, complete, updatedAt: new Date() },
+    };
 
-  if (error) {
+    const result = await taskCollection.findOneAndUpdate(
+      { _id: objectId },
+      updateDoc,
+      { returnDocument: "after" }
+    );
+    const updatedTask = result;
+    if (!updatedTask) {
+      return res.status(404).json({ error: `Task with ID ${id} not found` });
+    }
+
+    const transformedTask = transformTaskDocument(updatedTask);
+    res.json(transformedTask);
+  } catch (error) {
     return res.status(500).json({ error: error.message });
   }
-  res.json(data[0]);
 });
 
+//Delete task
 app.delete("/api/tasks/:id", async (req, res) => {
-  const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-  const { data, error } = await supabase.from("tasks").delete().eq("id", id);
+    const objectId = new ObjectId(id);
+    const result = await taskCollection.deleteOne({ _id: objectId });
 
-  if (error) {
-    return res.status(500).json({ error: error.message });
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: `Task with ID ${id} not found` });
+    }
+
+    res.json({ message: "Task deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-  res.json({ message: "Task deleted successfully" });
 });
 
-app.listen(port, () => {
-  console.log(`Server is listening on port ${port}`);
+app.get(/^(?!\/api).*$/, (req, res) => {
+  res.sendFile(path.join(__dirname, "static", "index.html"));
 });
+
+//Connect MongoDB
+async function startServer() {
+  try {
+    // Connect the client to the server	(optional starting in v4.7)
+    await client.connect();
+    console.log("Connected to MongoDB successfully");
+    //Initialize database and collection
+    db = client.db(dbName);
+    taskCollection = db.collection("tasks");
+
+    //Start the Express server
+    app.listen(port, () => {
+      console.log(`Server is listening on port ${port}`);
+    });
+  } catch (error) {
+    console.error("Failed to connect MongoDB:", error);
+  }
+}
+
+//Handle application termination
+process.on("SIGINT", async () => {
+  await client.close();
+  console.log("MongoDB connection closed due to app termination");
+  process.exit(0);
+});
+
+//start server
+startServer();
