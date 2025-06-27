@@ -1,38 +1,38 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
-import App from './App.jsx'
-import TaskList from './components/TaskList.jsx'
-import TaskDetail from './components/TaskDetail.jsx'
-import AddTask from './components/AddTask.jsx'
-import { loadTasks, loadTask } from './api/tasks.js'
-import './index.css'
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import App from "./App.jsx";
+import TaskList from "./components/TaskList.jsx";
+import TaskDetail from "./components/TaskDetail.jsx";
+import AddTask from "./components/AddTask.jsx";
+import { loadTasks, loadTask } from "./api/tasks.js";
+import "./index.css";
 
 const router = createBrowserRouter([
   {
-    path: '/',
+    path: "/",
     element: <App />,
     children: [
       {
         index: true,
         element: <TaskList />,
-        loader: loadTasks
+        loader: loadTasks,
       },
       {
-        path: 'detail/:id',
+        path: "detail/:id",
         element: <TaskDetail />,
-        loader: ({ params }) => loadTask(params.id)
+        loader: ({ params }) => loadTask(params.id),
       },
       {
-        path: 'add',
-        element: <AddTask />
-      }
-    ]
-  }
-])
+        path: "add",
+        element: <AddTask />,
+      },
+    ],
+  },
+]);
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <RouterProvider router={router} />
+    <RouterProvider router={router} fallbackElement={<p>Loading...</p>} />
   </React.StrictMode>
-)
+);
